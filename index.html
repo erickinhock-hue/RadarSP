@@ -1,0 +1,1933 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#060a11" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="RadarSP" />
+  <title>RadarSP • Eventos & Dinâmica Ao Vivo</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Leaflet.js CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            radar: {
+              bg: '#060a11',
+              panel: '#0c121e',
+              card: '#121b2d',
+              border: '#1e293b',
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    html, body {
+      background-color: #060a11;
+      color: #f1f5f9;
+      font-family: 'Inter', sans-serif;
+      overscroll-behavior: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Scrollbar customizada */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0c121e;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #25334d;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3b5075;
+    }
+
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* Slider Tático do Simulador */
+    input[type="range"].tactical-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      background: transparent;
+      cursor: pointer;
+    }
+    input[type="range"].tactical-slider::-webkit-slider-runnable-track {
+      height: 8px;
+      border-radius: 9999px;
+      background: linear-gradient(90deg, #06b6d4 0%, #3b82f6 35%, #f59e0b 65%, #ef4444 85%, #8b5cf6 100%);
+    }
+    input[type="range"].tactical-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      margin-top: -6px;
+      background-color: #ffffff;
+      border: 3px solid #06b6d4;
+      height: 20px;
+      width: 20px;
+      border-radius: 9999px;
+      box-shadow: 0 0 12px rgba(6, 182, 212, 0.9);
+      transition: transform 0.15s ease;
+    }
+    input[type="range"].tactical-slider::-webkit-slider-thumb:active {
+      transform: scale(1.2);
+    }
+
+    /* Animações de Pulso no Mapa */
+    @keyframes radarPing {
+      0% {
+        transform: scale(0.75);
+        opacity: 0.95;
+      }
+      75% {
+        transform: scale(2.45);
+        opacity: 0;
+      }
+      100% {
+        transform: scale(2.45);
+        opacity: 0;
+      }
+    }
+
+    @keyframes driverPing {
+      0% {
+        transform: scale(0.8);
+        opacity: 0.85;
+      }
+      100% {
+        transform: scale(2.6);
+        opacity: 0;
+      }
+    }
+
+    @keyframes liveBlink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
+    }
+
+    .marker-ping-red {
+      position: absolute;
+      inset: -8px;
+      border-radius: 9999px;
+      background: radial-gradient(circle, rgba(239, 68, 68, 0.8) 0%, rgba(239, 68, 68, 0) 70%);
+      animation: radarPing 1.7s cubic-bezier(0, 0, 0.2, 1) infinite;
+      pointer-events: none;
+    }
+
+    .marker-ping-amber {
+      position: absolute;
+      inset: -4px;
+      border-radius: 9999px;
+      background: radial-gradient(circle, rgba(245, 158, 11, 0.55) 0%, rgba(245, 158, 11, 0) 70%);
+      animation: radarPing 2.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+      pointer-events: none;
+    }
+
+    .driver-pulse-ring {
+      position: absolute;
+      inset: -6px;
+      border-radius: 9999px;
+      background: rgba(56, 189, 248, 0.45);
+      animation: driverPing 2s ease-out infinite;
+      pointer-events: none;
+    }
+
+    .animate-live-dot {
+      animation: liveBlink 1.5s ease-in-out infinite;
+    }
+
+    /* Leaflet Dark Theme Overrides */
+    .leaflet-container {
+      background: #060a11 !important;
+      font-family: 'Inter', sans-serif !important;
+    }
+    .leaflet-control-attribution {
+      background: rgba(12, 18, 30, 0.78) !important;
+      color: #64748b !important;
+      font-size: 10px !important;
+      border-top-left-radius: 8px;
+    }
+    .leaflet-control-attribution a {
+      color: #94a3b8 !important;
+    }
+    .leaflet-control-zoom {
+      border: 1px solid #1e293b !important;
+      border-radius: 12px !important;
+      overflow: hidden;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55) !important;
+    }
+    .leaflet-control-zoom a {
+      background-color: #0c121e !important;
+      color: #e2e8f0 !important;
+      border-bottom: 1px solid #1e293b !important;
+      width: 36px !important;
+      height: 36px !important;
+      line-height: 36px !important;
+      font-size: 18px !important;
+    }
+    .leaflet-control-zoom a:hover {
+      background-color: #1e293b !important;
+      color: #38bdf8 !important;
+    }
+  </style>
+</head>
+<body class="h-screen w-screen overflow-hidden flex flex-col select-none">
+
+  <!-- CABEÇALHO SUPERIOR -->
+  <header class="bg-radar-panel/95 backdrop-blur-md border-b border-radar-border z-30 shrink-0 px-3 py-2.5 lg:px-5">
+    <div class="max-w-[1800px] mx-auto flex flex-col gap-2">
+
+      <!-- Linha 1: Logo + Status Ao Vivo + Botões GPS, Simulador e Aeroportos -->
+      <div class="flex flex-wrap items-center justify-between gap-2">
+
+        <!-- Marca & Relógio Ao Vivo -->
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-500/40 flex items-center justify-center shadow-lg shadow-cyan-500/10 shrink-0">
+            <svg class="w-5 h-5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10" class="opacity-40"></circle>
+              <circle cx="12" cy="12" r="6" class="opacity-70"></circle>
+              <circle cx="12" cy="12" r="2" fill="currentColor"></circle>
+              <path d="M12 2v4M12 12l6.5-6.5"></path>
+            </svg>
+          </div>
+
+          <div>
+            <div class="flex items-center gap-2">
+              <h1 class="text-base sm:text-lg font-extrabold tracking-tight text-white">
+                RadarSP
+              </h1>
+              <!-- Indicador AO VIVO / SIMULADO + Relógio -->
+              <span id="live-status-pill" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-mono font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">
+                <span id="live-status-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-live-dot"></span>
+                <span id="live-status-text">AO VIVO • 00:00</span>
+              </span>
+            </div>
+            <div class="flex items-center gap-2 text-[11px] text-slate-400">
+              <span id="today-date-label">Carregando agenda de hoje...</span>
+              <span class="hidden sm:inline text-slate-600">•</span>
+              <span id="sync-badge" class="hidden sm:inline text-cyan-400/90 font-medium">Atualização Diária Ativa</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Botões de Ação Rápida (GPS, Simular Horário, Aeroportos) -->
+        <div class="flex items-center gap-1.5 sm:gap-2">
+          <!-- Botão GPS Minha Localização -->
+          <button
+            id="btn-gps"
+            onclick="requestUserLocation()"
+            class="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl text-xs font-semibold border transition-all bg-slate-900/90 border-slate-700 text-slate-300 hover:border-sky-500/60 hover:text-sky-300 active:scale-95"
+            title="Calcular distância da minha posição até cada evento"
+          >
+            <svg class="w-4 h-4 text-sky-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+            </svg>
+            <span id="gps-label" class="hidden sm:inline">Minha Localização</span>
+            <span id="gps-label-short" class="sm:hidden">GPS</span>
+          </button>
+
+          <!-- Botão Simular Horário -->
+          <button
+            id="btn-toggle-sim"
+            onclick="toggleSimulatorPanel()"
+            class="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl text-xs font-semibold border transition-all bg-slate-900/90 border-slate-700 text-slate-300 hover:border-cyan-500/60 hover:text-cyan-300 active:scale-95"
+          >
+            <svg class="w-4 h-4 text-cyan-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <span id="sim-toggle-label">Simular Horário</span>
+          </button>
+
+          <!-- Botão Toggle Aeroportos (OFF por padrão) -->
+          <button
+            id="btn-airports"
+            onclick="toggleAirports()"
+            aria-pressed="false"
+            class="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl text-xs font-semibold border transition-all bg-slate-900/90 border-slate-700 text-slate-400 hover:border-slate-500 active:scale-95"
+          >
+            <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>
+            </svg>
+            <span id="airports-label">Aeroportos: OFF</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Painel Retrátil do Simulador de Horário (Oculto por padrão pois começa AO VIVO) -->
+      <div id="simulator-bar" class="hidden bg-slate-900/95 border border-cyan-500/35 rounded-xl px-3 py-2 flex flex-col sm:flex-row sm:items-center gap-2.5 shadow-lg">
+        <div class="flex items-center justify-between sm:justify-start gap-2 shrink-0">
+          <div class="flex items-center gap-1.5">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-amber-300">Modo Simulação:</span>
+            <span id="sim-clock-display" class="font-mono text-sm font-extrabold text-white bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 rounded-lg">
+              22:45
+            </span>
+          </div>
+
+          <button
+            onclick="returnToLiveMode()"
+            class="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold transition active:scale-95"
+          >
+            Voltar ao Ao Vivo
+          </button>
+        </div>
+
+        <div class="flex items-center gap-2 flex-1">
+          <button
+            onclick="stepTime(-15)"
+            class="w-9 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center justify-center shrink-0 active:scale-90 transition"
+          >
+            -15m
+          </button>
+
+          <!-- Slider de 12:00 (0) até 04:00 (960 min) -->
+          <div class="flex-1 flex flex-col justify-center">
+            <input
+              id="time-slider"
+              type="range"
+              min="0"
+              max="960"
+              step="5"
+              value="645"
+              oninput="handleSliderChange(this.value)"
+              class="tactical-slider w-full"
+              aria-label="Simular Horário entre 12:00 e 04:00"
+            />
+            <div class="flex justify-between text-[9px] font-mono text-slate-500 mt-0.5 px-0.5">
+              <span>12:00</span>
+              <span>17:00</span>
+              <span>22:00</span>
+              <span>01:00</span>
+              <span>04:00</span>
+            </div>
+          </div>
+
+          <button
+            onclick="stepTime(15)"
+            class="w-9 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center justify-center shrink-0 active:scale-90 transition"
+          >
+            +15m
+          </button>
+        </div>
+      </div>
+
+      <!-- Linha 2: Campo de Busca Instantânea + Filtros por Categoria -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-2">
+        <!-- Input de Busca -->
+        <div class="relative flex-1 md:max-w-xs lg:max-w-sm">
+          <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input
+            id="search-input"
+            type="text"
+            oninput="handleSearchInput(this.value)"
+            placeholder="Buscar show, time, feira, local ou bairro..."
+            class="w-full bg-slate-900/95 border border-slate-700/90 focus:border-cyan-400 focus:outline-none rounded-xl pl-9 pr-8 py-1.5 text-xs sm:text-sm text-white placeholder-slate-500 transition"
+          />
+          <button
+            id="btn-clear-search"
+            onclick="clearSearch()"
+            class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs font-bold px-1"
+            aria-label="Limpar busca"
+          >
+            ✕
+          </button>
+        </div>
+
+        <!-- Pílulas de Categoria + Legenda -->
+        <div class="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
+          <div id="category-pills" class="flex items-center gap-1.5 py-0.5">
+            <!-- Preenchido via JS -->
+          </div>
+
+          <!-- Legenda Rápida Desktop -->
+          <div class="hidden xl:flex items-center gap-3.5 text-[11px] text-slate-400 bg-slate-900/70 px-3 py-1.5 rounded-xl border border-slate-800 shrink-0">
+            <span class="flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-red-500 animate-ping inline-block"></span>
+              <span class="text-red-400 font-semibold">Saída Agora (&le;25m)</span>
+            </span>
+            <span class="flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span>
+              <span class="text-amber-300 font-medium">Posicionar (&le;60m)</span>
+            </span>
+            <span class="flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-cyan-400 inline-block"></span>
+              <span class="text-cyan-300">Em Andamento / Hoje</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ÁREA PRINCIPAL DIVIDIDA: MAPA ESCURO + RADAR CRONOLÓGICO -->
+  <main class="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
+
+    <!-- COLUNA ESQUERDA / SUPERIOR: MAPA INTERATIVO DE SÃO PAULO -->
+    <section class="relative w-full h-[43vh] min-h-[250px] lg:h-full lg:flex-1 bg-radar-bg border-b lg:border-b-0 lg:border-r border-radar-border shrink-0">
+      <div id="map" class="w-full h-full z-10"></div>
+
+      <!-- Barra de Controles Flutuantes no Rodapé Esquerdo do Mapa -->
+      <div class="absolute bottom-3 left-3 z-20 flex flex-wrap items-center gap-2">
+        <button
+          onclick="resetMapCenter()"
+          class="bg-radar-panel/95 hover:bg-slate-800 text-slate-200 border border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold shadow-xl flex items-center gap-1.5 backdrop-blur-md active:scale-95 transition"
+        >
+          <svg class="w-4 h-4 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path>
+          </svg>
+          <span>Centralizar SP</span>
+        </button>
+
+        <button
+          id="btn-pin-mode"
+          onclick="toggleManualPinMode()"
+          class="bg-radar-panel/95 hover:bg-slate-800 text-slate-300 border border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold shadow-xl flex items-center gap-1.5 backdrop-blur-md active:scale-95 transition"
+          title="Toque para marcar manualmente onde você está no mapa"
+        >
+          <svg class="w-4 h-4 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+            <circle cx="12" cy="10" r="3"></circle>
+          </svg>
+          <span id="pin-mode-label">Marcar Meu Ponto</span>
+        </button>
+      </div>
+
+      <!-- HUD Superior Direito do Mapa (Resumo em Tempo Real) -->
+      <div class="absolute top-3 right-3 z-20 bg-radar-panel/90 backdrop-blur-md border border-slate-800 rounded-xl px-3 py-2 shadow-xl pointer-events-none">
+        <div class="flex items-center gap-3 text-xs">
+          <div>
+            <span class="text-slate-400 block text-[10px] uppercase font-semibold">Saída Agora</span>
+            <span id="hud-red-count" class="font-mono font-extrabold text-red-400 text-sm">0</span>
+          </div>
+          <div class="h-6 w-px bg-slate-800"></div>
+          <div>
+            <span class="text-slate-400 block text-[10px] uppercase font-semibold">Posicionar</span>
+            <span id="hud-amber-count" class="font-mono font-extrabold text-amber-400 text-sm">0</span>
+          </div>
+          <div class="h-6 w-px bg-slate-800"></div>
+          <div>
+            <span class="text-slate-400 block text-[10px] uppercase font-semibold">Público Total</span>
+            <span id="hud-crowd-total" class="font-mono font-extrabold text-cyan-300 text-sm">0k</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- COLUNA DIREITA / INFERIOR: LISTA DE EVENTOS -->
+    <aside class="flex-1 lg:flex-none lg:w-[420px] xl:w-[460px] h-full bg-radar-panel flex flex-col overflow-hidden">
+      <!-- Cabeçalho da Lista + Ordenação -->
+      <div class="px-3.5 py-2.5 border-b border-radar-border flex items-center justify-between gap-2 bg-slate-900/70 shrink-0">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-extrabold uppercase tracking-wider text-slate-200">Radar do Dia</span>
+          <span id="events-count-badge" class="text-xs font-mono font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded-full">
+            0 eventos
+          </span>
+        </div>
+
+        <!-- Botão Alternar Ordenação (Urgência vs Distância) -->
+        <button
+          id="btn-sort-mode"
+          onclick="toggleSortMode()"
+          class="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1 transition active:scale-95"
+        >
+          <span>Ordenar:</span>
+          <span id="sort-mode-label" class="text-cyan-300 font-bold">Urgência</span>
+        </button>
+      </div>
+
+      <!-- Lista Rolável de Cards -->
+      <div id="events-list" class="flex-1 overflow-y-auto p-3 space-y-2.5 pb-24 lg:pb-6">
+        <!-- Cards renderizados via JS -->
+      </div>
+    </aside>
+  </main>
+
+  <!-- MODAL COMPLETO DE DETALHES DO EVENTO -->
+  <div
+    id="detail-modal-backdrop"
+    onclick="handleBackdropClick(event)"
+    class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end lg:items-center justify-center p-0 sm:p-4 transition-opacity"
+  >
+    <div
+      id="detail-modal-card"
+      class="w-full lg:max-w-[500px] bg-radar-panel border-t sm:border border-slate-700 rounded-t-3xl sm:rounded-2xl shadow-2xl p-4 sm:p-5 max-h-[90vh] overflow-y-auto"
+    >
+      <!-- Conteúdo injetado dinamicamente ao clicar em um evento -->
+    </div>
+  </div>
+
+  <!-- Toast de Notificação -->
+  <div
+    id="toast"
+    class="fixed top-20 left-1/2 -translate-x-1/2 z-[60] pointer-events-none opacity-0 transition-opacity duration-200 bg-slate-800/95 text-white border border-cyan-500/40 px-4 py-2.5 rounded-xl shadow-2xl text-xs font-semibold flex items-center gap-2 max-w-[90vw]"
+  >
+    <span class="w-2 h-2 rounded-full bg-cyan-400 shrink-0"></span>
+    <span id="toast-text">Mensagem</span>
+  </div>
+
+  <script>
+    /**
+     * CONFIGURAÇÕES E CONSTANTES GLOBAIS
+     */
+    const CATEGORIES = ['Todos', 'Shows & Casas', 'Futebol', 'Feiras & Expos'];
+    const SP_CENTER = [-23.5620, -46.6380];
+
+    const state = {
+      mode: 'LIVE', // 'LIVE' (relógio real) ou 'SIM' (slider manual)
+      simOffsetFromNoon: 645, // 12:00 + 645 min = 22:45
+      showAirports: false,
+      selectedCategory: 'Todos',
+      searchQuery: '',
+      sortBy: 'URGENCY', // 'URGENCY' ou 'DISTANCE'
+      selectedEventId: null,
+      userLocation: null, // { lat, lng, source: 'GPS' | 'MANUAL' }
+      manualPinMode: false,
+      dailyEvents: [],
+      dataSourceLabel: 'Agenda Diária SP'
+    };
+
+    let map;
+    let heatLayerGroup;
+    let markersLayerGroup;
+    let userLayerGroup;
+    let liveClockInterval;
+
+    /**
+     * GERADOR DE AGENDA DIÁRIA AUTOMÁTICA (SEGUNDA A DOMINGO)
+     * Garante que ao abrir em qualquer dia da semana (segunda, terça, quarta,
+     * quinta, sexta, sábado ou domingo), o motorista já veja os jogos, feiras
+     * (Expo Center Norte, São Paulo Expo, Distrito Anhembi) e shows reais do dia.
+     * Se houver um arquivo 'eventos.json' atualizado via GitHub Actions, ele tem prioridade!
+     */
+    function buildDailyScheduleForToday(dateObj) {
+      const dayOfWeek = dateObj.getDay(); // 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sáb
+
+      // Eventos recorrentes diários (Feiras & Expos + Casas com programação contínua)
+      const baseEvents = [
+        {
+          id: 'expo-center-norte-feira',
+          category: 'Feiras & Expos',
+          title: 'Expo Brasil Negócios & Varejo 2026',
+          attraction: 'Pavilhão Branco e Azul • Feira Corporativa & Palestras',
+          venue: 'Expo Center Norte',
+          neighborhood: 'Vila Guilherme',
+          address: 'Rua José Bernardo Pinto, 333 - Vila Guilherme, São Paulo - SP',
+          lat: -23.5134,
+          lng: -46.6132,
+          crowdK: 18.5,
+          startTime: '11:00',
+          endTime: '20:30',
+          isAirport: false,
+          tip: 'Saída forte de expositores e visitantes pela Rua José Bernardo Pinto e Av. Otto Baumgart rumo à Marginal Tietê e hotéis da Zona Norte/Centro.'
+        },
+        {
+          id: 'sp-expo-congresso',
+          category: 'Feiras & Expos',
+          title: 'Summit Indústria, Logística & Tecnologia',
+          attraction: 'Pavilhões 1 a 5 • Rodada de Negócios & Encerramento',
+          venue: 'São Paulo Expo',
+          neighborhood: 'Vila Água Funda',
+          address: 'Rodovia dos Imigrantes, km 1,5 - Vila Água Funda, São Paulo - SP',
+          lat: -23.6465,
+          lng: -46.6295,
+          crowdK: 21.0,
+          startTime: '12:00',
+          endTime: '21:15',
+          isAirport: false,
+          tip: 'Grande fluxo de executivos indo para Congonhas, Zona Sul e ABC pela Rodovia dos Imigrantes e Av. Miguel Estéfno.'
+        },
+        {
+          id: 'distrito-anhembi-expo',
+          category: 'Feiras & Expos',
+          title: 'Convenção Nacional & Expo Saúde SP',
+          attraction: 'Centro de Convenções & Auditório Elis Regina',
+          venue: 'Distrito Anhembi',
+          neighborhood: 'Santana',
+          address: 'Av. Olavo Fontoura, 1209 - Santana, São Paulo - SP',
+          lat: -23.5152,
+          lng: -46.6368,
+          crowdK: 16.0,
+          startTime: '13:00',
+          endTime: '22:00',
+          isAirport: false,
+          tip: 'Embarque intenso na Av. Olavo Fontoura sentido Ponte Casa Verde e Marginal Tietê.'
+        },
+        {
+          id: 'blue-note-sp',
+          category: 'Shows & Casas',
+          title: 'Sessão Dupla Jazz, Soul & MPB ao Vivo',
+          attraction: 'Noite Musical na Paulista • Duas Sessões Noturnas',
+          venue: 'Blue Note São Paulo',
+          neighborhood: 'Bela Vista / Paulista',
+          address: 'Av. Paulista, 2073 - 2º Andar (Conjunto Nacional), São Paulo - SP',
+          lat: -23.5587,
+          lng: -46.6601,
+          crowdK: 1.8,
+          startTime: '20:00',
+          endTime: '23:30',
+          isAirport: false,
+          tip: 'Embarque rápido pela Rua Augusta ou Alameda Santos logo atrás do Conjunto Nacional para evitar bloqueios na Av. Paulista.'
+        }
+      ];
+
+      // Programação específica por dia da semana (Futebol + Grandes Shows)
+      const daySpecific = {
+        // DOMINGO
+        0: [
+          {
+            id: 'dom-allianz-futebol',
+            category: 'Futebol',
+            title: 'Palmeiras x São Paulo — Choque-Rei',
+            attraction: 'Campeonato Brasileiro • Clássico de Domingo',
+            venue: 'Allianz Parque',
+            neighborhood: 'Água Branca',
+            address: 'Av. Francisco Matarazzo, 1705 - Água Branca, São Paulo - SP',
+            lat: -23.5275,
+            lng: -46.6784,
+            crowdK: 41.0,
+            startTime: '16:00',
+            endTime: '18:05',
+            isAirport: false,
+            tip: 'Saída no início da noite de domingo com altíssima procura na Av. Francisco Matarazzo e Rua Palestra Itália.'
+          },
+          {
+            id: 'dom-neo-quimica',
+            category: 'Futebol',
+            title: 'Corinthians x Atlético-MG — Brasileirão',
+            attraction: 'Rodada Noturna de Domingo na Arena',
+            venue: 'Neo Química Arena',
+            neighborhood: 'Itaquera',
+            address: 'Av. Miguel Ignácio Curi, 111 - Artur Alvim, São Paulo - SP',
+            lat: -23.5453,
+            lng: -46.4742,
+            crowdK: 43.5,
+            startTime: '18:30',
+            endTime: '20:35',
+            isAirport: false,
+            tip: 'Corridas longas de retorno para Centro, Zona Norte e Zona Sul pela Radial Leste.'
+          },
+          {
+            id: 'dom-vibra-sp',
+            category: 'Shows & Casas',
+            title: 'Fábio Jr. & Especial Romântico',
+            attraction: 'Turnê Nacional • Sessão de Domingo',
+            venue: 'Vibra São Paulo',
+            neighborhood: 'Vila Almeida',
+            address: 'Av. das Nações Unidas, 17955 - Vila Almeida, São Paulo - SP',
+            lat: -23.6472,
+            lng: -46.7235,
+            crowdK: 6.5,
+            startTime: '20:00',
+            endTime: '22:20',
+            isAirport: false,
+            tip: 'Saída tranquila e ticket médio alto para Moema, Brooklin e Jardins.'
+          }
+        ],
+        // SEGUNDA-FEIRA
+        1: [
+          {
+            id: 'seg-pacaembu-futebol',
+            category: 'Futebol',
+            title: 'Santos x Cruzeiro — Segunda à Noite',
+            attraction: 'Campeonato Brasileiro • Jogo Isolado da Rodada',
+            venue: 'Mercado Livre Arena Pacaembu',
+            neighborhood: 'Pacaembu',
+            address: 'Praça Charles Miller, s/n - Pacaembu, São Paulo - SP',
+            lat: -23.5476,
+            lng: -46.6651,
+            crowdK: 24.0,
+            startTime: '20:00',
+            endTime: '22:05',
+            isAirport: false,
+            tip: 'Posicione-se na Av. Pacaembu ou Rua Itápolis; a Praça Charles Miller costuma ter bloqueio parcial na saída.'
+          },
+          {
+            id: 'seg-teatro-bradesco',
+            category: 'Shows & Casas',
+            title: 'Espetáculo Musical Broadway & Comédia',
+            attraction: 'Sessão Especial de Segunda • Bourbon Shopping',
+            venue: 'Teatro Bradesco',
+            neighborhood: 'Perdizes',
+            address: 'Rua Palestra Itália, 500 - 3º Piso - Perdizes, São Paulo - SP',
+            lat: -23.5266,
+            lng: -46.6811,
+            crowdK: 2.2,
+            startTime: '20:30',
+            endTime: '22:45',
+            isAirport: false,
+            tip: 'Embarque prático pela Rua Turiaçu ou Av. Pompeia.'
+          }
+        ],
+        // TERÇA-FEIRA
+        2: [
+          {
+            id: 'ter-morumbis-libertadores',
+            category: 'Futebol',
+            title: 'São Paulo x River Plate — Noite de Libertadores',
+            attraction: 'CONMEBOL Libertadores • Casa Cheia no Morumbi',
+            venue: 'MorumBIS',
+            neighborhood: 'Morumbi',
+            address: 'Praça Roberto Gomes Pedrosa, 1 - Morumbi, São Paulo - SP',
+            lat: -23.6001,
+            lng: -46.7201,
+            crowdK: 56.0,
+            startTime: '21:30',
+            endTime: '23:35',
+            isAirport: false,
+            tip: 'Pico máximo de dinâmica na Zona Oeste/Sul às 23:20. Evite entrar no funil da Praça; pegue passageiros na Av. Jorge João Saad ou Av. Giovanni Gronchi.'
+          },
+          {
+            id: 'ter-espaco-unimed',
+            category: 'Shows & Casas',
+            title: 'Gravação DVD Pagode & Convidados',
+            attraction: 'Show Especial de Terça-Feira • Pista & Camarotes',
+            venue: 'Espaço Unimed',
+            neighborhood: 'Barra Funda',
+            address: 'Rua Tagipuru, 795 - Barra Funda, São Paulo - SP',
+            lat: -23.5276,
+            lng: -46.6677,
+            crowdK: 7.8,
+            startTime: '21:00',
+            endTime: '23:45',
+            isAirport: false,
+            tip: 'Ótima opção para encaixar logo após a saída dos jogos ou feiras da Zona Norte.'
+          }
+        ],
+        // QUARTA-FEIRA
+        3: [
+          {
+            id: 'qua-neo-quimica-copa',
+            category: 'Futebol',
+            title: 'Corinthians x Flamengo — Copa do Brasil',
+            attraction: 'Jogo Decisivo de Quarta-Feira • Arena Lotada',
+            venue: 'Neo Química Arena',
+            neighborhood: 'Itaquera',
+            address: 'Av. Miguel Ignácio Curi, 111 - Artur Alvim, São Paulo - SP',
+            lat: -23.5453,
+            lng: -46.4742,
+            crowdK: 46.5,
+            startTime: '21:30',
+            endTime: '23:35',
+            isAirport: false,
+            tip: 'Quarta clássica de futebol: posicionamento às 23:15 na Radial Leste / Av. José Pinheiro Borges garante corridas longas com dinâmica alta.'
+          },
+          {
+            id: 'qua-allianz-sulamericana',
+            category: 'Futebol',
+            title: 'Palmeiras x Boca Juniors — Noite Continental',
+            attraction: 'Mata-Mata Internacional • Portões A, B, C e D',
+            venue: 'Allianz Parque',
+            neighborhood: 'Água Branca',
+            address: 'Av. Francisco Matarazzo, 1705 - Água Branca, São Paulo - SP',
+            lat: -23.5275,
+            lng: -46.6784,
+            crowdK: 41.5,
+            startTime: '21:30',
+            endTime: '23:35',
+            isAirport: false,
+            tip: 'Fluxo intenso rumo a Pinheiros, Perdizes e Marginal Tietê. Prefira embarque nas ruas transversais da Pompeia.'
+          },
+          {
+            id: 'qua-tokio-marine',
+            category: 'Shows & Casas',
+            title: 'Nando Reis & Os Infernais — Tour 2026',
+            attraction: 'Show Completo • Chácara Santo Antônio',
+            venue: 'Tokio Marine Hall',
+            neighborhood: 'Chácara Santo Antônio',
+            address: 'Rua Bragança Paulista, 1281 - Várzea de Baixo, São Paulo - SP',
+            lat: -23.6331,
+            lng: -46.7153,
+            crowdK: 4.0,
+            startTime: '21:30',
+            endTime: '23:40',
+            isAirport: false,
+            tip: 'Saída rápida pela Rua Bragança Paulista e Marginal Pinheiros.'
+          }
+        ],
+        // QUINTA-FEIRA
+        4: [
+          {
+            id: 'qui-morumbis-copa',
+            category: 'Futebol',
+            title: 'São Paulo x Grêmio — Copa do Brasil',
+            attraction: 'Quarta de Final • Grande Público no MorumBIS',
+            venue: 'MorumBIS',
+            neighborhood: 'Morumbi',
+            address: 'Praça Roberto Gomes Pedrosa, 1 - Morumbi, São Paulo - SP',
+            lat: -23.6001,
+            lng: -46.7201,
+            crowdK: 49.0,
+            startTime: '21:30',
+            endTime: '23:35',
+            isAirport: false,
+            tip: 'Alta demanda na Av. Jorge João Saad e Av. Eliseu de Almeida sentido Butantã / Pinheiros.'
+          },
+          {
+            id: 'qui-vibra-sp',
+            category: 'Shows & Casas',
+            title: 'Zeca Pagodinho — 40 Anos de Samba',
+            attraction: 'Show Especial de Quinta-Feira • Casa Cheia',
+            venue: 'Vibra São Paulo',
+            neighborhood: 'Vila Almeida',
+            address: 'Av. das Nações Unidas, 17955 - Vila Almeida, São Paulo - SP',
+            lat: -23.6472,
+            lng: -46.7235,
+            crowdK: 7.2,
+            startTime: '21:30',
+            endTime: '23:50',
+            isAirport: false,
+            tip: 'Excelente alternativa na Zona Sul sem o trânsito pesado de estádio.'
+          },
+          {
+            id: 'qui-audio-sp',
+            category: 'Shows & Casas',
+            title: 'Quinta Universitária & Sertanejo',
+            attraction: 'Dupla Convidada + DJs até a Madrugada',
+            venue: 'Audio',
+            neighborhood: 'Água Branca',
+            address: 'Av. Francisco Matarazzo, 694 - Água Branca, São Paulo - SP',
+            lat: -23.5284,
+            lng: -46.6655,
+            crowdK: 3.0,
+            startTime: '22:00',
+            endTime: '02:30',
+            isAirport: false,
+            tip: 'Movimento forte na saída entre 02:00 e 02:45 na Av. Francisco Matarazzo.'
+          }
+        ],
+        // SEXTA-FEIRA
+        5: [
+          {
+            id: 'sex-espaco-unimed',
+            category: 'Shows & Casas',
+            title: 'Jorge & Mateus — Turnê Única SP',
+            attraction: 'Show Completo • Ingressos Esgotados',
+            venue: 'Espaço Unimed',
+            neighborhood: 'Barra Funda',
+            address: 'Rua Tagipuru, 795 - Barra Funda, São Paulo - SP',
+            lat: -23.5276,
+            lng: -46.6677,
+            crowdK: 8.5,
+            startTime: '21:30',
+            endTime: '00:15',
+            isAirport: false,
+            tip: 'Público sai em massa na Rua Tagipuru e Av. Auro Soares de Moura Andrade. Posicione-se 15 min antes.'
+          },
+          {
+            id: 'sex-vibra-sp',
+            category: 'Shows & Casas',
+            title: 'Marisa Monte — Portas Tour',
+            attraction: 'Sexta-Feira de Casa Lotada na Zona Sul',
+            venue: 'Vibra São Paulo',
+            neighborhood: 'Vila Almeida',
+            address: 'Av. das Nações Unidas, 17955 - Vila Almeida, São Paulo - SP',
+            lat: -23.6472,
+            lng: -46.7235,
+            crowdK: 7.0,
+            startTime: '21:30',
+            endTime: '23:45',
+            isAirport: false,
+            tip: 'Corridas particulares de alto valor para Itaim Bibi, Jardins, Vila Olímpia e Moema.'
+          },
+          {
+            id: 'sex-tokio-marine',
+            category: 'Shows & Casas',
+            title: 'Roupa Nova — Sexta Clássica Ao Vivo',
+            attraction: 'Show Completo • Camarotes & Pista',
+            venue: 'Tokio Marine Hall',
+            neighborhood: 'Chácara Santo Antônio',
+            address: 'Rua Bragança Paulista, 1281 - Várzea de Baixo, São Paulo - SP',
+            lat: -23.6331,
+            lng: -46.7153,
+            crowdK: 4.0,
+            startTime: '22:00',
+            endTime: '00:10',
+            isAirport: false,
+            tip: 'Saída quase simultânea com a Vibra SP — região inteira fica com tarifa dinâmica elevada.'
+          },
+          {
+            id: 'sex-audio-madrugada',
+            category: 'Shows & Casas',
+            title: 'Baile Funk & Eletrônico — Sexta Night',
+            attraction: 'Line-up Completo + Convidados Especiais',
+            venue: 'Audio',
+            neighborhood: 'Água Branca',
+            address: 'Av. Francisco Matarazzo, 694 - Água Branca, São Paulo - SP',
+            lat: -23.5284,
+            lng: -46.6655,
+            crowdK: 3.4,
+            startTime: '22:30',
+            endTime: '03:30',
+            isAirport: false,
+            tip: 'Segundo pico da madrugada para quem roda após a 01h da manhã.'
+          }
+        ],
+        // SÁBADO
+        6: [
+          {
+            id: 'sab-allianz-derby',
+            category: 'Futebol',
+            title: 'Palmeiras x Corinthians — Derby Paulista',
+            attraction: 'Campeonato Brasileiro • Clássico de Sábado à Noite',
+            venue: 'Allianz Parque',
+            neighborhood: 'Água Branca',
+            address: 'Av. Francisco Matarazzo, 1705 - Água Branca, São Paulo - SP',
+            lat: -23.5275,
+            lng: -46.6784,
+            crowdK: 41.5,
+            startTime: '21:00',
+            endTime: '23:05',
+            isAirport: false,
+            tip: 'Fluxo intenso na Av. Francisco Matarazzo, Rua Palestra Itália e Viaduto Antártica. Posicione-se nas transversais da Pompeia.'
+          },
+          {
+            id: 'sab-morumbis-show',
+            category: 'Shows & Casas',
+            title: 'Mega Show Internacional — Stadium Tour SP',
+            attraction: 'Turnê Mundial • Estádio do MorumBIS Lotado',
+            venue: 'MorumBIS',
+            neighborhood: 'Morumbi',
+            address: 'Praça Roberto Gomes Pedrosa, 1 - Morumbi, São Paulo - SP',
+            lat: -23.6001,
+            lng: -46.7201,
+            crowdK: 62.0,
+            startTime: '21:00',
+            endTime: '23:30',
+            isAirport: false,
+            tip: 'Maior concentração de público da cidade. Embarque estratégico na Av. Jorge João Saad e Av. Giovanni Gronchi.'
+          },
+          {
+            id: 'sab-espaco-unimed',
+            category: 'Shows & Casas',
+            title: 'Henrique & Juliano — Sábado Sertanejo',
+            attraction: 'Show Completo + Participação Especial',
+            venue: 'Espaço Unimed',
+            neighborhood: 'Barra Funda',
+            address: 'Rua Tagipuru, 795 - Barra Funda, São Paulo - SP',
+            lat: -23.5276,
+            lng: -46.6677,
+            crowdK: 8.5,
+            startTime: '21:30',
+            endTime: '00:15',
+            isAirport: false,
+            tip: 'Engate perfeito logo após a saída do Allianz Parque ali ao lado.'
+          },
+          {
+            id: 'sab-terra-sp',
+            category: 'Shows & Casas',
+            title: 'Noite do Pagode & Trap — Terra SP',
+            attraction: 'Shows Ao Vivo na Zona Sul até a Madrugada',
+            venue: 'Terra SP',
+            neighborhood: 'Campo Grande / Interlagos',
+            address: 'Av. Salim Antônio Curiati, 160 - Campo Grande, São Paulo - SP',
+            lat: -23.6815,
+            lng: -46.6872,
+            crowdK: 4.5,
+            startTime: '22:00',
+            endTime: '03:30',
+            isAirport: false,
+            tip: 'Forte demanda na madrugada na região de Interlagos, Santo Amaro e Av. Sabará.'
+          }
+        ]
+      };
+
+      // Aeroportos (exibidos apenas quando o toggle Aeroportos estiver ON)
+      const airportWaves = [
+        {
+          id: 'cgh-onda-pousos',
+          category: 'Aeroportos',
+          title: 'Onda de Pousos • Ponte Aérea & Conexões',
+          attraction: '14 voos domésticos pousando (RJ, BSB, CNF, POA, CWB)',
+          venue: 'Aeroporto de Congonhas (CGH)',
+          neighborhood: 'Campo Belo',
+          address: 'Av. Washington Luís, s/n - Vila Congonhas, São Paulo - SP',
+          lat: -23.6261,
+          lng: -46.6564,
+          crowdK: 4.8,
+          startTime: '21:30',
+          endTime: '23:15',
+          isAirport: true,
+          tip: 'Última grande janela de desembarque antes do fechamento da pista de Congonhas às 23h.'
+        },
+        {
+          id: 'gru-onda-internacional',
+          category: 'Aeroportos',
+          title: 'Desembarque Internacional & Voos Noturnos T2/T3',
+          attraction: 'Chegadas Europa / EUA + Conexões Nacionais',
+          venue: 'Aeroporto de Guarulhos (GRU)',
+          neighborhood: 'Cumbica • Guarulhos',
+          address: 'Rod. Hélio Smidt, s/n - Cumbica, Guarulhos - SP',
+          lat: -23.4356,
+          lng: -46.4731,
+          crowdK: 9.5,
+          startTime: '22:00',
+          endTime: '00:45',
+          isAirport: true,
+          tip: 'Corridas longas de ticket médio elevado rumo à capital paulista pela Rod. Ayrton Senna / Marginal Tietê.'
+        }
+      ];
+
+      return [
+        ...(daySpecific[dayOfWeek] || daySpecific[5]),
+        ...baseEvents,
+        ...airportWaves
+      ];
+    }
+
+    /**
+     * SINCRONIZAÇÃO DIÁRIA AUTOMÁTICA
+     * Tenta carregar 'eventos.json' (gerado diariamente pelo robô do GitHub Actions).
+     * Se ainda não existir no servidor, carrega automaticamente a agenda inteligente do dia.
+     */
+    async function loadDailyEvents() {
+      const today = new Date();
+      const dateKey = today.toISOString().slice(0, 10);
+
+      // Formata data legível em português no cabeçalho
+      const formattedDate = today.toLocaleDateString('pt-BR', {
+        weekday: 'long',
+        day: '2-digit',
+        month: 'short'
+      });
+      document.getElementById('today-date-label').textContent =
+        formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1);
+
+      try {
+        const response = await fetch(`./eventos.json?v=${dateKey}`, { cache: 'no-store' });
+        if (response.ok) {
+          const data = await response.json();
+          if (Array.isArray(data) && data.length > 0) {
+            state.dailyEvents = data;
+            state.dataSourceLabel = 'Sincronizado Hoje (Auto)';
+            document.getElementById('sync-badge').textContent = 'Base Online Atualizada Hoje';
+            updateUI(true);
+            return;
+          }
+        }
+      } catch (e) {
+        // Fallback silencioso para a agenda diária embutida
+      }
+
+      state.dailyEvents = buildDailyScheduleForToday(today);
+      updateUI(true);
+    }
+
+    /**
+     * FUNÇÕES DE TEMPO E RELÓGIO (AO VIVO + SIMULAÇÃO)
+     */
+    function getNowContinuousMinutes() {
+      if (state.mode === 'SIM') {
+        // Slider começa em 12:00 (720 min) e vai até 04:00 (1680 min)
+        return 720 + state.simOffsetFromNoon;
+      }
+      const now = new Date();
+      const mins = now.getHours() * 60 + now.getMinutes();
+      // Madrugada (00:00 até 05:59) continua na linha do tempo noturna (+1440)
+      return mins < 360 ? mins + 1440 : mins;
+    }
+
+    function timeStrToContinuousMinutes(timeStr) {
+      const [hh, mm] = timeStr.split(':').map(Number);
+      const adjustedHour = hh < 6 ? hh + 24 : hh;
+      return adjustedHour * 60 + mm;
+    }
+
+    function continuousMinutesToTimeStr(totalMins) {
+      const normalized = ((totalMins % 1440) + 1440) % 1440;
+      const hh = String(Math.floor(normalized / 60)).padStart(2, '0');
+      const mm = String(normalized % 60).padStart(2, '0');
+      return `${hh}:${mm}`;
+    }
+
+    function getGoldenWindow(endTimeStr) {
+      const endMins = timeStrToContinuousMinutes(endTimeStr);
+      const startGolden = continuousMinutesToTimeStr(endMins - 20);
+      const endGolden = continuousMinutesToTimeStr(endMins - 5);
+      return `${startGolden} – ${endGolden}`;
+    }
+
+    function updateClockHeader() {
+      const pill = document.getElementById('live-status-pill');
+      const dot = document.getElementById('live-status-dot');
+      const text = document.getElementById('live-status-text');
+
+      if (state.mode === 'LIVE') {
+        const now = new Date();
+        const hh = String(now.getHours()).padStart(2, '0');
+        const mm = String(now.getMinutes()).padStart(2, '0');
+
+        pill.className = 'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/40';
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-live-dot';
+        text.textContent = `AO VIVO • ${hh}:${mm}`;
+      } else {
+        const simTime = continuousMinutesToTimeStr(getNowContinuousMinutes());
+        pill.className = 'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40';
+        dot.className = 'w-2 h-2 rounded-full bg-amber-400';
+        text.textContent = `SIMULADO • ${simTime}`;
+        document.getElementById('sim-clock-display').textContent = simTime;
+      }
+    }
+
+    /**
+     * CLASSIFICAÇÃO DE URGÊNCIA DA DINÂMICA
+     */
+    function evaluateEventUrgency(event, currentMins) {
+      const startMins = timeStrToContinuousMinutes(event.startTime);
+      const endMins = timeStrToContinuousMinutes(event.endTime);
+      const minsToEnd = endMins - currentMins;
+      const totalDuration = Math.max(endMins - startMins, 30);
+      const elapsed = currentMins - startMins;
+
+      let progress = Math.round((elapsed / totalDuration) * 100);
+      progress = Math.max(5, Math.min(100, progress));
+
+      // 1. VERMELHO PULSANTE: Faltam <= 25 min para acabar ou acabou há <= 30 min
+      if (minsToEnd <= 25 && minsToEnd >= -30) {
+        const label = minsToEnd > 0
+          ? `SAÍDA EM ${minsToEnd} MIN`
+          : minsToEnd === 0
+            ? 'ACABANDO AGORA'
+            : `SAIU HÁ ${Math.abs(minsToEnd)} MIN`;
+
+        return {
+          tier: 'CRITICAL',
+          priority: 1,
+          minsToEnd,
+          progress: 100,
+          statusText: label,
+          badgeBg: 'bg-red-500/20 text-red-300 border-red-500/50',
+          barColor: 'bg-gradient-to-r from-amber-500 to-red-500 animate-pulse',
+          hex: '#ef4444',
+          fillOpacity: 0.36,
+          strokeOpacity: 0.85,
+          markerRingClass: 'marker-ping-red'
+        };
+      }
+
+      // 2. ÂMBAR: Faltam entre 26 min e 60 min para acabar (Hora de deslocar)
+      if (minsToEnd > 25 && minsToEnd <= 60) {
+        return {
+          tier: 'WARMING',
+          priority: 2,
+          minsToEnd,
+          progress: Math.max(progress, 74),
+          statusText: `POSICIONAR • FIM EM ${minsToEnd}M`,
+          badgeBg: 'bg-amber-500/20 text-amber-300 border-amber-500/45',
+          barColor: 'bg-gradient-to-r from-cyan-400 to-amber-400',
+          hex: '#f59e0b',
+          fillOpacity: 0.25,
+          strokeOpacity: 0.65,
+          markerRingClass: 'marker-ping-amber'
+        };
+      }
+
+      // 3. CIANO: Em andamento (> 60m para acabar) ou Programado para hoje
+      if (minsToEnd > 60) {
+        const isNotStartedYet = currentMins < startMins;
+        const statusText = isNotStartedYet
+          ? `HOJE • INICIA ${event.startTime}`
+          : `EM ANDAMENTO • FIM ${event.endTime}`;
+
+        return {
+          tier: 'ACTIVE',
+          priority: 3,
+          minsToEnd,
+          progress: isNotStartedYet ? 8 : progress,
+          statusText,
+          badgeBg: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/35',
+          barColor: 'bg-cyan-400',
+          hex: '#06b6d4',
+          fillOpacity: 0.18,
+          strokeOpacity: 0.45,
+          markerRingClass: ''
+        };
+      }
+
+      // 4. RESIDUAL: Encerrou há mais de 30 min
+      return {
+        tier: 'RESIDUAL',
+        priority: 4,
+        minsToEnd,
+        progress: 100,
+        statusText: `ENCERRADO (${event.endTime})`,
+        badgeBg: 'bg-slate-800 text-slate-400 border-slate-700',
+        barColor: 'bg-slate-600',
+        hex: '#64748b',
+        fillOpacity: 0.08,
+        strokeOpacity: 0.25,
+        markerRingClass: ''
+      };
+    }
+
+    /**
+     * CÁLCULO DE DISTÂNCIA GPS (HAVERSINE + FATOR VIÁRIO SP)
+     */
+    function calculateRoadDistanceKm(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const straightKm = R * c;
+      // Fator de correção urbana de ~1.28x para aproximar trajeto real de rua
+      return straightKm * 1.28;
+    }
+
+    function requestUserLocation() {
+      if (!navigator.geolocation) {
+        showToast('Seu navegador não suporta GPS. Use "Marcar Meu Ponto" no mapa.');
+        return;
+      }
+
+      showToast('Obtendo sua localização GPS...');
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setUserPosition(pos.coords.latitude, pos.coords.longitude, 'GPS');
+          showToast('Localização GPS ativada! Distâncias calculadas.');
+        },
+        () => {
+          showToast('GPS indisponível/bloqueado. Toque em "Marcar Meu Ponto" no mapa.');
+          enableManualPinMode();
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+      );
+    }
+
+    function toggleManualPinMode() {
+      if (state.manualPinMode) {
+        state.manualPinMode = false;
+        updatePinButtonUI();
+        return;
+      }
+      enableManualPinMode();
+    }
+
+    function enableManualPinMode() {
+      state.manualPinMode = true;
+      updatePinButtonUI();
+      showToast('Toque em qualquer rua no mapa para definir sua posição atual.');
+    }
+
+    function updatePinButtonUI() {
+      const btn = document.getElementById('btn-pin-mode');
+      const label = document.getElementById('pin-mode-label');
+      if (state.manualPinMode) {
+        btn.classList.add('border-sky-400', 'bg-sky-500/20', 'text-sky-200');
+        label.textContent = 'Toque no Mapa...';
+      } else {
+        btn.classList.remove('border-sky-400', 'bg-sky-500/20', 'text-sky-200');
+        label.textContent = state.userLocation ? 'Atualizar Meu Ponto' : 'Marcar Meu Ponto';
+      }
+    }
+
+    function setUserPosition(lat, lng, source) {
+      state.userLocation = { lat, lng, source };
+      state.manualPinMode = false;
+
+      const gpsBtn = document.getElementById('btn-gps');
+      gpsBtn.classList.remove('bg-slate-900/90', 'border-slate-700', 'text-slate-300');
+      gpsBtn.classList.add('bg-sky-500/20', 'border-sky-400', 'text-sky-200');
+      document.getElementById('gps-label').textContent = 'GPS Ativo';
+      document.getElementById('gps-label-short').textContent = 'GPS ON';
+      updatePinButtonUI();
+
+      renderUserMarker();
+      updateUI(false);
+    }
+
+    function renderUserMarker() {
+      if (!userLayerGroup) return;
+      userLayerGroup.clearLayers();
+      if (!state.userLocation) return;
+
+      const { lat, lng } = state.userLocation;
+      const driverIcon = L.divIcon({
+        html: `
+          <div class="relative flex items-center justify-center w-8 h-8">
+            <div class="driver-pulse-ring"></div>
+            <div class="relative z-10 w-4 h-4 rounded-full bg-sky-400 border-2 border-white shadow-lg"></div>
+          </div>
+        `,
+        className: 'bg-transparent border-0',
+        iconSize: [32, 32],
+        iconAnchor: [16, 16]
+      });
+
+      L.marker([lat, lng], { icon: driverIcon })
+        .bindTooltip('Sua posição', { direction: 'top', offset: [0, -10] })
+        .addTo(userLayerGroup);
+    }
+
+    /**
+     * FILTRAGEM E ORDENAÇÃO DOS EVENTOS
+     */
+    function getFilteredSortedEvents() {
+      const currentMins = getNowContinuousMinutes();
+      const query = state.searchQuery.trim().toLowerCase();
+
+      return state.dailyEvents
+        .filter(ev => {
+          if (!state.showAirports && ev.isAirport) return false;
+          if (state.selectedCategory !== 'Todos' && ev.category !== state.selectedCategory) {
+            return false;
+          }
+          if (query) {
+            const haystack = `${ev.title} ${ev.attraction} ${ev.venue} ${ev.neighborhood} ${ev.category}`.toLowerCase();
+            if (!haystack.includes(query)) return false;
+          }
+          return true;
+        })
+        .map(ev => {
+          const urgency = evaluateEventUrgency(ev, currentMins);
+          let distanceKm = null;
+          let driveMins = null;
+
+          if (state.userLocation) {
+            distanceKm = calculateRoadDistanceKm(
+              state.userLocation.lat,
+              state.userLocation.lng,
+              ev.lat,
+              ev.lng
+            );
+            driveMins = Math.max(4, Math.round(distanceKm * 2.1));
+          }
+
+          return {
+            ...ev,
+            urgency,
+            distanceKm,
+            driveMins
+          };
+        })
+        .sort((a, b) => {
+          if (state.sortBy === 'DISTANCE' && a.distanceKm !== null && b.distanceKm !== null) {
+            return a.distanceKm - b.distanceKm;
+          }
+          if (a.urgency.priority !== b.urgency.priority) {
+            return a.urgency.priority - b.urgency.priority;
+          }
+          return a.urgency.minsToEnd - b.urgency.minsToEnd;
+        });
+    }
+
+    /**
+     * INICIALIZAÇÃO DO MAPA LEAFLET
+     */
+    function initMap() {
+      map = L.map('map', {
+        center: SP_CENTER,
+        zoom: 11,
+        zoomControl: true
+      });
+
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap &copy; CARTO',
+        subdomains: 'abcd',
+        maxZoom: 19
+      }).addTo(map);
+
+      heatLayerGroup = L.layerGroup().addTo(map);
+      markersLayerGroup = L.layerGroup().addTo(map);
+      userLayerGroup = L.layerGroup().addTo(map);
+
+      // Permite marcar posição manualmente ao clicar no mapa se o modo estiver ativo
+      map.on('click', (e) => {
+        if (state.manualPinMode) {
+          setUserPosition(e.latlng.lat, e.latlng.lng, 'MANUAL');
+          showToast('Ponto de partida marcado no mapa! Distâncias atualizadas.');
+        }
+      });
+
+      setTimeout(() => map.invalidateSize(), 150);
+      window.addEventListener('resize', () => map.invalidateSize());
+    }
+
+    function getCategorySVG(category) {
+      if (category === 'Futebol') {
+        return `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 7l4 3-1.5 4.5h-5L8 10l4-3z"/></svg>`;
+      }
+      if (category === 'Feiras & Expos') {
+        return `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h6M7 16h4"/></svg>`;
+      }
+      if (category === 'Aeroportos') {
+        return `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></svg>`;
+      }
+      return `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`;
+    }
+
+    /**
+     * RENDERIZAÇÃO DAS MANCHAS DE CALOR E PINOS NO MAPA
+     */
+    function renderMapLayers(events) {
+      heatLayerGroup.clearLayers();
+      markersLayerGroup.clearLayers();
+
+      events.forEach(ev => {
+        const u = ev.urgency;
+        const baseRadius = Math.min(1650, Math.max(620, ev.crowdK * 26));
+
+        const outerCircle = L.circle([ev.lat, ev.lng], {
+          radius: baseRadius * 1.38,
+          color: u.hex,
+          weight: 0,
+          fillColor: u.hex,
+          fillOpacity: u.fillOpacity * 0.45,
+          interactive: true
+        });
+
+        const innerCircle = L.circle([ev.lat, ev.lng], {
+          radius: baseRadius * 0.75,
+          color: u.hex,
+          weight: 1.5,
+          opacity: u.strokeOpacity,
+          fillColor: u.hex,
+          fillOpacity: u.fillOpacity,
+          interactive: true
+        });
+
+        const onPinTap = () => openEventModal(ev.id, true);
+        outerCircle.on('click', onPinTap);
+        innerCircle.on('click', onPinTap);
+
+        outerCircle.addTo(heatLayerGroup);
+        innerCircle.addTo(heatLayerGroup);
+
+        const isSelected = state.selectedEventId === ev.id;
+        const ringHtml = u.markerRingClass ? `<div class="${u.markerRingClass}"></div>` : '';
+
+        const iconHtml = `
+          <div class="relative flex items-center justify-center w-9 h-9">
+            ${ringHtml}
+            <div style="background-color: #0c121e; border-color: ${u.hex}; color: ${u.hex};"
+                 class="relative z-10 w-8 h-8 rounded-full border-2 flex items-center justify-center shadow-lg transition-transform ${isSelected ? 'scale-125 ring-2 ring-white' : ''}">
+              ${getCategorySVG(ev.category)}
+            </div>
+            <span style="background-color: ${u.hex};"
+                  class="absolute -bottom-2.5 z-20 text-[9px] font-mono font-extrabold text-slate-950 px-1.5 rounded-full shadow">
+              ${ev.crowdK}k
+            </span>
+          </div>
+        `;
+
+        const customIcon = L.divIcon({
+          html: iconHtml,
+          className: 'bg-transparent border-0',
+          iconSize: [36, 36],
+          iconAnchor: [18, 18]
+        });
+
+        const marker = L.marker([ev.lat, ev.lng], { icon: customIcon });
+        marker.on('click', onPinTap);
+        marker.addTo(markersLayerGroup);
+      });
+    }
+
+    /**
+     * RENDERIZAÇÃO DAS PÍLULAS DE CATEGORIA
+     */
+    function renderCategoryPills() {
+      const container = document.getElementById('category-pills');
+      container.innerHTML = CATEGORIES.map(cat => {
+        const active = state.selectedCategory === cat;
+        const classes = active
+          ? 'bg-cyan-500 text-slate-950 font-extrabold border-cyan-400 shadow-lg shadow-cyan-500/20'
+          : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 border-slate-700/80 font-medium';
+
+        return `
+          <button
+            onclick="setCategory('${cat}')"
+            class="px-3 py-1.5 rounded-full text-xs border whitespace-nowrap transition-all active:scale-95 ${classes}"
+          >
+            ${cat}
+          </button>
+        `;
+      }).join('');
+    }
+
+    /**
+     * RENDERIZAÇÃO DA LISTA DE EVENTOS
+     */
+    function renderEventsList(events) {
+      const listEl = document.getElementById('events-list');
+      const countBadge = document.getElementById('events-count-badge');
+      const hudRed = document.getElementById('hud-red-count');
+      const hudAmber = document.getElementById('hud-amber-count');
+      const hudCrowd = document.getElementById('hud-crowd-total');
+
+      countBadge.textContent = `${events.length} ${events.length === 1 ? 'evento' : 'eventos'}`;
+
+      const criticalCount = events.filter(e => e.urgency.tier === 'CRITICAL').length;
+      const warmingCount = events.filter(e => e.urgency.tier === 'WARMING').length;
+      const totalCrowd = events
+        .filter(e => e.urgency.tier !== 'RESIDUAL')
+        .reduce((acc, e) => acc + e.crowdK, 0);
+
+      hudRed.textContent = criticalCount;
+      hudAmber.textContent = warmingCount;
+      hudCrowd.textContent = `${totalCrowd.toFixed(1)}k`;
+
+      if (events.length === 0) {
+        listEl.innerHTML = `
+          <div class="text-center py-10 px-4 bg-radar-card/60 rounded-2xl border border-slate-800">
+            <p class="text-sm font-bold text-slate-200">Nenhum evento encontrado</p>
+            <p class="text-xs text-slate-400 mt-1">Tente limpar a busca ou selecionar a categoria "Todos".</p>
+          </div>
+        `;
+        return;
+      }
+
+      listEl.innerHTML = events.map(ev => {
+        const u = ev.urgency;
+        const goldenWindow = getGoldenWindow(ev.endTime);
+
+        const distanceBadge = ev.distanceKm !== null
+          ? `<span class="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-sky-300 bg-sky-500/15 border border-sky-500/30 px-2 py-0.5 rounded-lg">
+               ${ev.distanceKm.toFixed(1)} km (~${ev.driveMins}m)
+             </span>`
+          : '';
+
+        return `
+          <article
+            onclick="openEventModal('${ev.id}', true)"
+            class="cursor-pointer rounded-2xl p-3.5 border transition-all duration-150 bg-radar-card/95 hover:bg-slate-800/85 border-slate-800 hover:border-cyan-500/50 active:scale-[0.99]"
+          >
+            <!-- Linha Superior: Categoria + Badge de Status -->
+            <div class="flex items-center justify-between gap-2 mb-1.5">
+              <span class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-300 bg-slate-900 border border-slate-700/80 px-2 py-0.5 rounded-lg">
+                ${getCategorySVG(ev.category)}
+                <span>${ev.category}</span>
+              </span>
+
+              <span class="text-[10px] font-mono font-extrabold px-2 py-0.5 rounded-full border ${u.badgeBg}">
+                ${u.statusText}
+              </span>
+            </div>
+
+            <!-- Título do Evento -->
+            <h3 class="text-sm sm:text-[15px] font-extrabold text-white leading-snug">
+              ${ev.title}
+            </h3>
+
+            <!-- Local & Bairro + Distância GPS / Público -->
+            <div class="flex flex-wrap items-center justify-between gap-1.5 mt-1.5 text-xs text-slate-400">
+              <span class="font-medium text-slate-300">${ev.venue} • <span class="text-slate-400">${ev.neighborhood}</span></span>
+              <div class="flex items-center gap-1.5">
+                ${distanceBadge}
+                <span class="font-mono font-bold text-cyan-300">${ev.crowdK}k</span>
+              </div>
+            </div>
+
+            <!-- Horários e Janela Ouro de Saída -->
+            <div class="grid grid-cols-2 gap-2 mt-2.5 pt-2.5 border-t border-slate-800/90 text-[11px]">
+              <div class="bg-slate-900/80 rounded-xl px-2.5 py-1.5">
+                <span class="text-slate-500 block text-[10px]">Horário do Evento</span>
+                <span class="font-mono font-bold text-slate-200">${ev.startTime} – ${ev.endTime}</span>
+              </div>
+              <div class="bg-amber-500/10 border border-amber-500/25 rounded-xl px-2.5 py-1.5">
+                <span class="text-amber-300/85 block text-[10px] font-semibold">Janela Ouro de Saída</span>
+                <span class="font-mono font-extrabold text-amber-300">${goldenWindow}</span>
+              </div>
+            </div>
+
+            <!-- Barra de Progresso -->
+            <div class="mt-2.5">
+              <div class="flex justify-between text-[10px] text-slate-400 mb-1">
+                <span>Termômetro de Saída</span>
+                <span class="font-mono font-semibold text-slate-300">${u.progress}%</span>
+              </div>
+              <div class="w-full h-2 bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                <div class="h-full rounded-full transition-all duration-300 ${u.barColor}" style="width: ${u.progress}%"></div>
+              </div>
+            </div>
+          </article>
+        `;
+      }).join('');
+    }
+
+    /**
+     * MODAL COMPLETO DE DETALHES DO EVENTO
+     */
+    function openEventModal(eventId, flyToMap = true) {
+      state.selectedEventId = eventId;
+      const ev = state.dailyEvents.find(item => item.id === eventId);
+      if (!ev) return;
+
+      if (flyToMap && map) {
+        map.flyTo([ev.lat, ev.lng], 14, { duration: 0.7 });
+      }
+
+      const u = evaluateEventUrgency(ev, getNowContinuousMinutes());
+      const goldenWindow = getGoldenWindow(ev.endTime);
+      const wazeUrl = `https://waze.com/ul?ll=${ev.lat},${ev.lng}&navigate=yes`;
+      const gmapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${ev.lat},${ev.lng}`;
+
+      let distanceSection = '';
+      if (state.userLocation) {
+        const km = calculateRoadDistanceKm(state.userLocation.lat, state.userLocation.lng, ev.lat, ev.lng);
+        const mins = Math.max(4, Math.round(km * 2.1));
+        distanceSection = `
+          <div class="bg-sky-500/15 border border-sky-500/35 rounded-xl px-3 py-2 flex items-center justify-between text-xs">
+            <span class="text-sky-200 font-semibold">Distância da sua posição atual:</span>
+            <span class="font-mono font-extrabold text-sky-300">${km.toFixed(1)} km (~${mins} min)</span>
+          </div>
+        `;
+      }
+
+      const modalCard = document.getElementById('detail-modal-card');
+      modalCard.innerHTML = `
+        <!-- Topo do Modal -->
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="flex flex-wrap items-center gap-1.5 mb-1.5">
+              <span class="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-800 text-cyan-300 border border-slate-700">
+                ${ev.category}
+              </span>
+              <span class="text-[11px] font-mono font-extrabold px-2.5 py-0.5 rounded-full border ${u.badgeBg}">
+                ${u.statusText}
+              </span>
+            </div>
+            <h2 class="text-lg sm:text-xl font-extrabold text-white leading-tight">${ev.title}</h2>
+            <p class="text-xs sm:text-sm text-cyan-300 font-medium mt-1">${ev.attraction}</p>
+          </div>
+
+          <button
+            onclick="closeEventModal()"
+            aria-label="Fechar janela"
+            class="w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center shrink-0 active:scale-90 transition"
+          >
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+              <path d="M18 6 6 18M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Corpo do Modal -->
+        <div class="mt-4 space-y-2.5 text-xs">
+          ${distanceSection}
+
+          <!-- Endereço Exato + Botão Copiar -->
+          <div class="bg-slate-900/95 border border-slate-800 rounded-xl p-3 flex items-start justify-between gap-2.5">
+            <div>
+              <span class="text-[10px] uppercase tracking-wider text-slate-500 font-bold block">Local & Endereço Completo</span>
+              <span class="font-bold text-slate-100 text-sm block mt-0.5">${ev.venue} • ${ev.neighborhood}</span>
+              <p class="text-slate-400 mt-0.5 leading-relaxed">${ev.address}</p>
+            </div>
+            <button
+              onclick="copyAddress('${ev.address.replace(/'/g, "\\'")}')"
+              class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-bold shrink-0 active:scale-95 transition"
+            >
+              Copiar
+            </button>
+          </div>
+
+          <!-- Métricas de Público, Horário e Janela Ouro -->
+          <div class="grid grid-cols-3 gap-2">
+            <div class="bg-slate-900/95 border border-slate-800 rounded-xl p-2.5">
+              <span class="text-[10px] text-slate-500 block">Público Est.</span>
+              <span class="font-mono font-extrabold text-white text-sm">${ev.crowdK}k</span>
+            </div>
+            <div class="bg-slate-900/95 border border-slate-800 rounded-xl p-2.5">
+              <span class="text-[10px] text-slate-500 block">Início / Fim</span>
+              <span class="font-mono font-bold text-slate-200 text-sm">${ev.startTime}–${ev.endTime}</span>
+            </div>
+            <div class="bg-amber-500/15 border border-amber-500/40 rounded-xl p-2.5">
+              <span class="text-[10px] text-amber-300 font-bold block">Janela Ouro</span>
+              <span class="font-mono font-extrabold text-amber-300 text-sm">${goldenWindow}</span>
+            </div>
+          </div>
+
+          <!-- Dica Tática de Posicionamento -->
+          <div class="bg-cyan-950/40 border border-cyan-500/30 rounded-xl p-3 text-xs text-cyan-100 leading-relaxed">
+            <strong class="text-cyan-300 uppercase tracking-wide text-[11px] block mb-0.5">Dica Tática de Saída:</strong>
+            ${ev.tip}
+          </div>
+        </div>
+
+        <!-- Botões de Navegação em 1 Toque -->
+        <div class="grid grid-cols-2 gap-3 mt-4 pt-1">
+          <a
+            href="${wazeUrl}"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="min-h-[50px] rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-extrabold text-sm flex items-center justify-center gap-2 shadow-lg shadow-sky-500/25 active:scale-95 transition"
+          >
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 3C7.03 3 3 6.58 3 11c0 2.41 1.2 4.57 3.1 6.04-.17.9-.65 2.02-1.45 2.75-.25.23-.11.65.23.69 1.63.18 3.32-.22 4.49-.91.85.28 1.73.43 2.63.43 4.97 0 9-3.58 9-8s-4.03-8-9-8zm-2.5 7.5a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5zm5 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5z"/>
+            </svg>
+            <span>Abrir no Waze</span>
+          </a>
+
+          <a
+            href="${gmapsUrl}"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="min-h-[50px] rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 active:scale-95 transition"
+          >
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
+              <circle cx="12" cy="10" r="3"/>
+            </svg>
+            <span>Google Maps</span>
+          </a>
+        </div>
+      `;
+
+      document.getElementById('detail-modal-backdrop').classList.remove('hidden');
+      renderMapLayers(getFilteredSortedEvents());
+    }
+
+    function closeEventModal() {
+      state.selectedEventId = null;
+      document.getElementById('detail-modal-backdrop').classList.add('hidden');
+      renderMapLayers(getFilteredSortedEvents());
+    }
+
+    function handleBackdropClick(e) {
+      if (e.target.id === 'detail-modal-backdrop') {
+        closeEventModal();
+      }
+    }
+
+    /**
+     * CONTROLES DE SIMULAÇÃO, BUSCA E FILTROS
+     */
+    function toggleSimulatorPanel() {
+      const bar = document.getElementById('simulator-bar');
+      const btn = document.getElementById('btn-toggle-sim');
+
+      if (bar.classList.contains('hidden')) {
+        bar.classList.remove('hidden');
+        state.mode = 'SIM';
+
+        // Sincroniza o slider com o horário atual (ou 22:30 se estiver de manhã)
+        const now = new Date();
+        const curMins = now.getHours() * 60 + now.getMinutes();
+        const adjusted = curMins < 360 ? curMins + 1440 : curMins;
+        if (adjusted >= 720 && adjusted <= 1680) {
+          state.simOffsetFromNoon = adjusted - 720;
+        } else {
+          state.simOffsetFromNoon = 630; // 22:30
+        }
+
+        document.getElementById('time-slider').value = state.simOffsetFromNoon;
+        btn.classList.add('border-amber-400', 'bg-amber-500/20', 'text-amber-200');
+        updateClockHeader();
+        updateUI(false);
+      } else {
+        returnToLiveMode();
+      }
+    }
+
+    function returnToLiveMode() {
+      state.mode = 'LIVE';
+      document.getElementById('simulator-bar').classList.add('hidden');
+      const btn = document.getElementById('btn-toggle-sim');
+      btn.classList.remove('border-amber-400', 'bg-amber-500/20', 'text-amber-200');
+      updateClockHeader();
+      updateUI(false);
+      showToast('Sincronizado com o horário real (AO VIVO).');
+    }
+
+    function handleSliderChange(val) {
+      state.mode = 'SIM';
+      state.simOffsetFromNoon = Number(val);
+      updateClockHeader();
+      updateUI(false);
+    }
+
+    function stepTime(delta) {
+      state.mode = 'SIM';
+      state.simOffsetFromNoon = Math.max(0, Math.min(960, state.simOffsetFromNoon + delta));
+      document.getElementById('time-slider').value = state.simOffsetFromNoon;
+      updateClockHeader();
+      updateUI(false);
+    }
+
+    function handleSearchInput(val) {
+      state.searchQuery = val;
+      const clearBtn = document.getElementById('btn-clear-search');
+      if (val.trim().length > 0) {
+        clearBtn.classList.remove('hidden');
+      } else {
+        clearBtn.classList.add('hidden');
+      }
+      updateUI(false);
+    }
+
+    function clearSearch() {
+      state.searchQuery = '';
+      document.getElementById('search-input').value = '';
+      document.getElementById('btn-clear-search').classList.add('hidden');
+      updateUI(false);
+    }
+
+    function setCategory(cat) {
+      state.selectedCategory = cat;
+      updateUI(true);
+    }
+
+    function toggleAirports() {
+      state.showAirports = !state.showAirports;
+      const btn = document.getElementById('btn-airports');
+      const label = document.getElementById('airports-label');
+
+      if (state.showAirports) {
+        btn.classList.remove('bg-slate-900/90', 'border-slate-700', 'text-slate-400');
+        btn.classList.add('bg-cyan-500/20', 'border-cyan-400', 'text-cyan-300');
+        btn.setAttribute('aria-pressed', 'true');
+        label.textContent = 'Aeroportos: ON';
+        showToast('Ondas de pousos em Congonhas (CGH) e Guarulhos (GRU) ativadas.');
+      } else {
+        btn.classList.add('bg-slate-900/90', 'border-slate-700', 'text-slate-400');
+        btn.classList.remove('bg-cyan-500/20', 'border-cyan-400', 'text-cyan-300');
+        btn.setAttribute('aria-pressed', 'false');
+        label.textContent = 'Aeroportos: OFF';
+        showToast('Aeroportos ocultados do radar.');
+      }
+      updateUI(false);
+    }
+
+    function toggleSortMode() {
+      if (state.sortBy === 'URGENCY') {
+        if (!state.userLocation) {
+          showToast('Ative o GPS ou toque em "Marcar Meu Ponto" para ordenar por distância.');
+          requestUserLocation();
+          return;
+        }
+        state.sortBy = 'DISTANCE';
+        document.getElementById('sort-mode-label').textContent = 'Mais Perto';
+      } else {
+        state.sortBy = 'URGENCY';
+        document.getElementById('sort-mode-label').textContent = 'Urgência';
+      }
+      updateUI(false);
+    }
+
+    function resetMapCenter() {
+      if (map) {
+        map.flyTo(SP_CENTER, 11, { duration: 0.7 });
+      }
+    }
+
+    function copyAddress(text) {
+      try {
+        const tempInput = document.createElement('textarea');
+        tempInput.value = text;
+        tempInput.style.position = 'fixed';
+        tempInput.style.opacity = '0';
+        document.body.appendChild(tempInput);
+        tempInput.select();
+        document.execCommand('copy');
+        document.body.removeChild(tempInput);
+        showToast('Endereço copiado!');
+      } catch (err) {
+        showToast('Não foi possível copiar o endereço.');
+      }
+    }
+
+    let toastTimer;
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toast-text').textContent = msg;
+      toast.classList.remove('opacity-0');
+      toast.classList.add('opacity-100');
+
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        toast.classList.remove('opacity-100');
+        toast.classList.add('opacity-0');
+      }, 2800);
+    }
+
+    function updateUI(reRenderPills = false) {
+      if (reRenderPills) {
+        renderCategoryPills();
+      }
+      const events = getFilteredSortedEvents();
+      renderMapLayers(events);
+      renderEventsList(events);
+    }
+
+    /**
+     * REGISTRO DE MANIFEST PWA DINÂMICO (Para instalar como App no Android/iPhone)
+     */
+    function setupDynamicPWAManifest() {
+      try {
+        const manifest = {
+          name: 'RadarSP • Eventos & Dinâmica',
+          short_name: 'RadarSP',
+          start_url: '.',
+          display: 'standalone',
+          background_color: '#060a11',
+          theme_color: '#060a11',
+          orientation: 'any'
+        };
+        const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+        const manifestUrl = URL.createObjectURL(blob);
+        const link = document.createElement('link');
+        link.rel = 'manifest';
+        link.href = manifestUrl;
+        document.head.appendChild(link);
+      } catch (e) {
+        // Ignora se bloqueado
+      }
+    }
+
+    // INICIALIZAÇÃO GERAL
+    window.addEventListener('DOMContentLoaded', () => {
+      setupDynamicPWAManifest();
+      initMap();
+      updateClockHeader();
+      loadDailyEvents();
+
+      // Atualiza relógio real e termômetro de urgência a cada 15 segundos
+      liveClockInterval = setInterval(() => {
+        if (state.mode === 'LIVE') {
+          updateClockHeader();
+          updateUI(false);
+        }
+      }, 15000);
+    });
+  </script>
+</body>
+</html>
